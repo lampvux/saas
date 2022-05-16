@@ -7,6 +7,7 @@ import * as mongoose from 'mongoose';
 
 import api from './api';
 import { setupGoogle } from './google-auth';
+import { setupFacebook } from './facebook-auth';
 import { setupPasswordless } from './passwordless-auth';
 import { setupSockets } from './sockets';
 import { stripeWebhookAndCheckoutCallback } from './stripe';
@@ -77,6 +78,7 @@ const sessionMiddleware = session(sessionOptions);
 server.use(sessionMiddleware);
 
 setupGoogle({ server });
+setupFacebook({ server });
 setupPasswordless({ server });
 
 api(server);

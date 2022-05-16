@@ -43,6 +43,20 @@ const mongoSchema = new mongoose.Schema({
     required: true,
     default: false,
   },
+  facebookId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  facebookToken: {
+    accessToken: String,
+    refreshToken: String,
+  },
+  isSignedupViaFacebook: {
+    type: Boolean,
+    required: true,
+    default: false,
+  },
   darkTheme: Boolean,
   defaultTeamSlug: {
     type: String,
@@ -101,6 +115,9 @@ export interface UserDocument extends mongoose.Document {
   googleId: string;
   googleToken: { accessToken: string; refreshToken: string };
   isSignedupViaGoogle: boolean;
+  facebookId: string;
+  facebookToken: { accessToken: string; refreshToken: string };
+  isSignedupViaFacebook: boolean;
   darkTheme: boolean;
   defaultTeamSlug: string;
   stripeCustomer: {
@@ -170,6 +187,20 @@ interface UserModel extends mongoose.Model<UserDocument> {
     displayName: string;
     avatarUrl: string;
     googleToken: { accessToken?: string; refreshToken?: string };
+  }): Promise<UserDocument>;
+
+  signInOrSignUpViaFacebook({
+    facebookId,
+    email,
+    displayName,
+    avatarUrl,
+    facebookToken,
+  }: {
+    facebookId: string;
+    email: string;
+    displayName: string;
+    avatarUrl: string;
+    facebookToken: { accessToken?: string; refreshToken?: string };
   }): Promise<UserDocument>;
 
   signInOrSignUpByPasswordless({
@@ -301,6 +332,76 @@ class UserClass extends mongoose.Model {
       avatarUrl,
       slug,
       isSignedupViaGoogle: true,
+      defaultTeamSlug: '',
+    });
+
+    const emailTemplate = await getEmailTemplate('welcome', { userName: displayName });
+
+    if (!emailTemplate) {
+      throw new Error('Welcome email template not found');
+    }
+
+    try {
+      await sendEmail({
+        from: `Kelly from saas-app.async-await.com <${process.env.EMAIL_SUPPORT_FROM_ADDRESS}>`,
+        to: [email],
+        subject: emailTemplate.subject,
+        body: emailTemplate.message,
+      });
+    } catch (err) {
+      console.error('Email sending error:', err);
+    }
+
+    try {
+      await addToMailchimp({ email, listName: 'signups' });
+    } catch (error) {
+      console.error('Mailchimp error:', error);
+    }
+
+    return _.pick(newUser, this.publicFields());
+  }
+
+  public static async signInOrSignUpViaFacebook({
+    facebookId,
+    email,
+    displayName,
+    avatarUrl,
+    facebookToken,
+  }) {
+    const user = await this.findOne({ email })
+      .select([...this.publicFields(), 'facebookId'].join(' '))
+      .setOptions({ lean: true });
+
+    if (user) {
+      if (_.isEmpty(facebookToken) && user.facebookId) {
+        return user;
+      }
+
+      const modifier = { facebookId };
+      if (facebookToken.accessToken) {
+        modifier['facebookToken.accessToken'] = facebookToken.accessToken;
+      }
+
+      if (facebookToken.refreshToken) {
+        modifier['facebookToken.refreshToken'] = facebookToken.refreshToken;
+      }
+
+      await this.updateOne({ email }, { $set: modifier });
+
+      return user;
+    }
+
+    const slug = await generateSlug(this, displayName);
+
+    const newUser = await this.create({
+      createdAt: new Date(),
+      facebookId,
+      email,
+      facebookToken,
+      displayName,
+      avatarUrl,
+      slug,
+      isSignedupViaFacebook: true,
       defaultTeamSlug: '',
     });
 

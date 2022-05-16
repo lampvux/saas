@@ -44,7 +44,7 @@ function setupGoogle({ server }) {
       {
         clientID: process.env.GOOGLE_CLIENTID,
         clientSecret: process.env.GOOGLE_CLIENTSECRET,
-        callbackURL: `${dev ? process.env.URL_API : process.env.PRODUCTION_URL_API}/oauth2callback`,
+        callbackURL: `${dev ? process.env.URL_API : process.env.PRODUCTION_URL_API}/auth/google/callback`,
       },
       verify,
     ),
@@ -79,7 +79,7 @@ function setupGoogle({ server }) {
   });
 
   server.get(
-    '/oauth2callback',
+    '/auth/google/callback',
     passport.authenticate('google', {
       failureRedirect: '/login',
     }),
